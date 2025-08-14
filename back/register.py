@@ -13,6 +13,10 @@ import threading
 import base64
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 from fastapi.middleware.cors import CORSMiddleware
+import bcrypt
+import jwt
+from datetime import datetime, timedelta
+from typing import Any, Dict
 
 app = FastAPI()
 
@@ -32,6 +36,17 @@ class RegisterRequest(BaseModel):
     course_taken: str
     date_registered: str
     birthdate: str
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+JWT_SECRET = "change_this_secret"
+JWT_EXPIRE_MINUTES = 60
+
+class AdminCreateRequest(BaseModel):
+    username: str
+    password: str
+
 
 
 class FingerprintScanner:
@@ -86,7 +101,15 @@ class FingerprintScanner:
         finally:
             if conn:
                 conn.close()
-    def __init__(self):
+
+current_capture: Dict[str, Any] = {
+    "status": "idle",
+    "count": 0,
+    "log": [],
+    "fingerprint_template_b64": None,
+    "student": None,
+}
+def __init__(self):
         self.logger = logging.getLogger('fps')
         fh = logging.FileHandler('logs.log')
         fh.setLevel(logging.INFO)
@@ -106,7 +129,7 @@ class FingerprintScanner:
             'charset': 'utf8mb4'
         }
 
-    def save_template_to_db(self, template_bytes,  student_data: RegisterRequest):
+def save_template_to_db(self, template_bytes,  student_data: RegisterRequest):
         if not isinstance(template_bytes, (bytes, bytearray)):
             print(f"Error: fingerprint template is not bytes, type: {type(template_bytes)}, value: {template_bytes}")
             self.logger.error(f"Fingerprint template is not bytes, type: {type(template_bytes)}, value: {template_bytes}")
@@ -139,26 +162,6 @@ class FingerprintScanner:
 @app.post("/verify-only")
 def verify_only():
     try:
-        fingerprint_scanner = FingerprintScanner()
-        print("Place your finger on the scanner...")
-        while True:
-            capture = fingerprint_scanner.zkfp2.AcquireFingerprint()
-            if not capture:
-                sleep(0.1)
-                continue
-            tmp, img = capture
-            print("Checking fingerprint in database...")
-            found = fingerprint_scanner.verify_user_from_db(tmp)
-            if found:
-                print("Fingerprint verified!")
-                return found
-            raise HTTPException(status_code=404, detail="No matching fingerprint found")
-    except AttributeError as e:
-        # Fallback path if class initialization fails (e.g., missing initialize_zkfp2)
-        if "initialize_zkfp2" not in str(e):
-            raise
-        logger = logging.getLogger('fps')
-        print("Fallback verify-only: direct device init")
         zk = ZKFP2()
         zk.Init()
         zk.OpenDevice(0)
@@ -180,11 +183,11 @@ def verify_only():
                     if not results:
                         zk.Light('red', 1)
                         raise HTTPException(status_code=404, detail="No records in database")
-                    if str(type(tmp)) == "<class 'System.Byte[]>":
+                    if str(type(tmp)) == "<class 'System.Byte[]'>":
                         tmp = bytes(tmp)
                     for row in results:
                         stored_template = row.get('fingerprint_template')
-                        if str(type(stored_template)) == "<class 'System.Byte[]>":
+                        if str(type(stored_template)) == "<class 'System.Byte[]'>":
                             stored_template = bytes(stored_template)
                         if not stored_template or not tmp:
                             continue
@@ -203,6 +206,11 @@ def verify_only():
             finally:
                 if conn:
                     conn.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"/verify-only error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
     def initialize_zkfp2(self):
         self.zkfp2 = ZKFP2()
@@ -306,6 +314,12 @@ def register_user():
 def register_start():
     """Block until three successful taps are collected, then return merged template (base64)."""
     try:
+        # initialize progress
+        current_capture["status"] = "capturing"
+        current_capture["count"] = 0
+        current_capture["log"] = []
+        current_capture["fingerprint_template_b64"] = None
+        current_capture["student"] = None
         zk = ZKFP2()
         zk.Init()
         zk.OpenDevice(0)
@@ -335,6 +349,15 @@ def register_start():
                             score = zk.DBMatch(stored_b, check_tmp)
                             if score > 200:
                                 zk.Light('green')
+                                current_capture["status"] = "already_registered"
+                                current_capture["student"] = {
+                                    "student_name": row.get('student_name'),
+                                    "age": row.get('age'),
+                                    "address": row.get('address'),
+                                    "course_taken": row.get('course_taken'),
+                                    "birthdate": row.get('birthdate'),
+                                }
+                                current_capture["log"] = capture_log
                                 return {"status": "already_registered", "message": "User already registered.", "student": {
                                     "student_name": row.get('student_name'),
                                     "age": row.get('age'),
@@ -355,6 +378,8 @@ def register_start():
                 zk.Light('green')
                 print("Finger 1 registered successfully! 2 presses left.")
                 capture_log.append("Finger 1 registered successfully! 2 presses left.")
+                current_capture["count"] = len(templates)
+                current_capture["log"] = capture_log[:]
                 sleep(0.3)
                 continue
             last_template = templates[-1]
@@ -365,11 +390,14 @@ def register_start():
                 if remaining > 0:
                     print(f"Finger {len(templates)} registered successfully! {remaining} presses left.")
                     capture_log.append(f"Finger {len(templates)} registered successfully! {remaining} presses left.")
+                current_capture["count"] = len(templates)
+                current_capture["log"] = capture_log[:]
                 sleep(0.3)
             else:
                 zk.Light('red', 1)
                 print("Different finger. Please enter the original finger!")
                 capture_log.append("Different finger. Please enter the original finger!")
+                current_capture["log"] = capture_log[:]
                 sleep(0.3)
 
             if len(templates) == 3:
@@ -377,10 +405,27 @@ def register_start():
                 if str(type(regTemp)) == "<class 'System.Byte[]'>":
                     regTemp = bytes(regTemp)
                 template_b64 = base64.b64encode(regTemp).decode('utf-8')
+                current_capture["status"] = "done"
+                current_capture["fingerprint_template_b64"] = template_b64
+                current_capture["count"] = 3
+                current_capture["log"] = capture_log[:]
                 return {"status": "ok", "message": "Fingerprint captured.", "fingerprint_template_b64": template_b64, "capture_log": capture_log}
     except Exception as e:
         print(f"Error during capture: {e}")
+        current_capture["status"] = "error"
         raise HTTPException(status_code=500, detail="Failed to capture fingerprint.")
+
+
+@app.get("/register-progress")
+def register_progress():
+    # Return a shallow copy to avoid accidental mutation by clients
+    return {
+        "status": current_capture.get("status"),
+        "count": current_capture.get("count", 0),
+        "log": current_capture.get("log", []),
+        "fingerprint_template_b64": current_capture.get("fingerprint_template_b64"),
+        "student": current_capture.get("student"),
+    }
 
 
 class SaveStudentRequest(RegisterRequest):
@@ -447,6 +492,59 @@ def register_user():
                 except Exception as e:
                     print(f"Error during registration: {e}")
             sleep(1)
+
+
+
+@app.post("/admin-create")
+def admin_create(payload: AdminCreateRequest):
+    if not payload.username or not payload.password:
+        raise HTTPException(status_code=400, detail="username and password are required")
+    conn = None
+    try:
+        conn = pymysql.connect(host='localhost', user='root', password='', db='db', charset='utf8mb4', cursorclass=pymysql.cursors.DictCursor)
+        with conn.cursor() as cursor:
+            # check if exists
+            cursor.execute("SELECT id FROM admin WHERE username=%s", (payload.username,))
+            if cursor.fetchone():
+                raise HTTPException(status_code=409, detail="username already exists")
+            hashed = bcrypt.hashpw(payload.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            cursor.execute("INSERT INTO admin (username, password) VALUES (%s, %s)", (payload.username, hashed))
+        conn.commit()
+        return {"status": "ok", "message": "admin created"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.post("/login")
+def login(payload: LoginRequest):
+    conn = None
+    try:
+        conn = pymysql.connect(host='localhost', user='root', password='', db='db', charset='utf8mb4', cursorclass=pymysql.cursors.DictCursor)
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM admin WHERE username=%s", (payload.username,))
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=401, detail="Invalid credentials")
+            stored_hash = row['password']
+            if not bcrypt.checkpw(payload.password.encode('utf-8'), stored_hash.encode('utf-8')):
+                raise HTTPException(status_code=401, detail="Invalid credentials")
+            exp = datetime.utcnow() + timedelta(minutes=JWT_EXPIRE_MINUTES)
+            token = jwt.encode({"sub": payload.username, "exp": exp}, JWT_SECRET, algorithm="HS256")
+            return {"token": token}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -13,12 +13,16 @@
         <p><strong>Birthdate:</strong> {{ student.birthdate }}</p>
         </div>
         <div v-if="status === 'error'">Fingerprint not found or something went wrong!</div>
+        <div v-if="found">
+            <h1>no users found</h1>
+        </div>
     </div>
 </template>
 
 <script setup>
 import { ref, watch } from 'vue'
 
+const found = ref(false)
 const status = ref('')
 const student = ref({})
 
@@ -26,26 +30,25 @@ watch(status, (newStatus) => {
 if (newStatus === 'success') {
     console.log('Verified! Student found.')
 } else if (newStatus === 'error') {
-    alert('❌ No matching fingerprint found.')
+    found.value =true
 }
 })
 
 async function verify() {
 status.value = 'loading';
-
+found.value = false
 try {
-    status.value = 'verifying'
 
+    status.value = 'verifying'
     const res = await $fetch('http://127.0.0.1:8000/verify-only', {
     method: 'POST'
     })
     student.value = res
+    
     status.value = 'success'
-} catch (err) {
-    console.error('API error:', err)
-    status.value = 'error'
-}
-}
+    } catch (err) {
+        console.error('API error:', err)
+        status.value = 'error'
+    }
+    }
 </script>
-  
-  

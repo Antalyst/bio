@@ -1,8 +1,10 @@
 <template>
     <div>
         <div v-if="step === 'capture'">
-            <p>Place the same finger on the scanner 3 times…</p>
-            <button :disabled="loading" @click="startCapture">{{ loading ? 'Waiting for device…' : 'Start Capture' }}</button>
+            <p v-if="!loading">Place the same finger on the scanner 3 times…</p>
+            <p v-else>Capturing… Presses: {{ pressCount }}/3</p>
+            <p v-if="pressCount && !loading">Captured: {{ pressCount }}/3</p>
+            <button :disabled="loading" @click="startCapture">{{ loading ? 'Capturing…' : 'Start Capture' }}</button>
             <p v-if="message">{{ message }}</p>
             <ul v-if="captureLog.length">
                 <li v-for="(line, idx) in captureLog" :key="idx">{{ line }}</li>
@@ -45,7 +47,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 
 const step = ref('capture')
 const loading = ref(false)
@@ -53,6 +55,39 @@ const submitting = ref(false)
 const message = ref('')
 const captureLog = ref([])
 const capturedTemplateB64 = ref('')
+
+const pressCount = ref(0)
+
+let progressTimer = null
+
+function startPolling() {
+    if (progressTimer) return
+    progressTimer = setInterval(async () => {
+        try {
+            const res = await fetch(`${apiBase}/register-progress`)
+            const data = await res.json()
+            if (Array.isArray(data.log)) {
+                captureLog.value = data.log
+            }
+            if (typeof data.count === 'number') {
+                pressCount.value = data.count
+            }
+            if (data.status === 'done' || data.status === 'already_registered' || data.status === 'error') {
+                clearInterval(progressTimer)
+                progressTimer = null
+            }
+        } catch {}
+    }, 500)
+}
+
+onMounted(() => {
+    startPolling()
+})
+
+onBeforeUnmount(() => {
+    if (progressTimer) clearInterval(progressTimer)
+    progressTimer = null
+})
 
 const form = ref({
     student_name: '',
@@ -70,6 +105,9 @@ async function startCapture() {
     loading.value = true
     message.value = 'Waiting for 3 taps…'
     try {
+        pressCount.value = 0
+        captureLog.value = []
+        startPolling()
         const res = await fetch(`${apiBase}/register-start`, { method: 'POST' })
         if (!res.ok) throw new Error('Capture failed')
         const data = await res.json()
@@ -81,6 +119,7 @@ async function startCapture() {
         }
         capturedTemplateB64.value = data.fingerprint_template_b64
         captureLog.value = data.capture_log || []
+        pressCount.value = 3
         step.value = 'form'
         message.value = 'Fingerprint captured. Please fill the form.'
     } catch (e) {
