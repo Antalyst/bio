@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 import asyncio
 import threading
+import base64
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -135,6 +136,74 @@ class FingerprintScanner:
                 conn.close()
 
 
+@app.post("/verify-only")
+def verify_only():
+    try:
+        fingerprint_scanner = FingerprintScanner()
+        print("Place your finger on the scanner...")
+        while True:
+            capture = fingerprint_scanner.zkfp2.AcquireFingerprint()
+            if not capture:
+                sleep(0.1)
+                continue
+            tmp, img = capture
+            print("Checking fingerprint in database...")
+            found = fingerprint_scanner.verify_user_from_db(tmp)
+            if found:
+                print("Fingerprint verified!")
+                return found
+            raise HTTPException(status_code=404, detail="No matching fingerprint found")
+    except AttributeError as e:
+        # Fallback path if class initialization fails (e.g., missing initialize_zkfp2)
+        if "initialize_zkfp2" not in str(e):
+            raise
+        logger = logging.getLogger('fps')
+        print("Fallback verify-only: direct device init")
+        zk = ZKFP2()
+        zk.Init()
+        zk.OpenDevice(0)
+        zk.Light('green')
+        print("Place your finger on the scanner...")
+        while True:
+            capture = zk.AcquireFingerprint()
+            if not capture:
+                sleep(0.1)
+                continue
+            tmp, img = capture
+            print("Checking fingerprint in database (student table)...")
+            conn = None
+            try:
+                conn = pymysql.connect(host='localhost', user='root', password='', db='db', cursorclass=pymysql.cursors.DictCursor)
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT * FROM student")
+                    results = cursor.fetchall()
+                    if not results:
+                        zk.Light('red', 1)
+                        raise HTTPException(status_code=404, detail="No records in database")
+                    if str(type(tmp)) == "<class 'System.Byte[]>":
+                        tmp = bytes(tmp)
+                    for row in results:
+                        stored_template = row.get('fingerprint_template')
+                        if str(type(stored_template)) == "<class 'System.Byte[]>":
+                            stored_template = bytes(stored_template)
+                        if not stored_template or not tmp:
+                            continue
+                        score = zk.DBMatch(stored_template, tmp)
+                        if score > 200:
+                            zk.Light('green')
+                            return {
+                                "student_name": row.get('student_name'),
+                                "age": row.get('age'),
+                                "address": row.get('address'),
+                                "course_taken": row.get('course_taken'),
+                                "birthdate": row.get('birthdate'),
+                            }
+                    zk.Light('red', 1)
+                    raise HTTPException(status_code=404, detail="No matching fingerprint found")
+            finally:
+                if conn:
+                    conn.close()
+
     def initialize_zkfp2(self):
         self.zkfp2 = ZKFP2()
         self.zkfp2.Init()
@@ -233,6 +302,151 @@ def register_user():
             sleep(1)
 
 
+@app.post("/register-start")
+def register_start():
+    """Block until three successful taps are collected, then return merged template (base64)."""
+    try:
+        zk = ZKFP2()
+        zk.Init()
+        zk.OpenDevice(0)
+        zk.Light('green')
+        print("Place your finger on the scanner three times...")
+        templates = []
+        capture_log = []
+        while True:
+            capture = zk.AcquireFingerprint()
+            if not capture:
+                sleep(0.1)
+                continue
+            tmp, img = capture
+            # Try early verification on first tap to avoid re-registering existing users
+            if not templates:
+                try:
+                    conn = pymysql.connect(host='localhost', user='root', password='', db='db', cursorclass=pymysql.cursors.DictCursor)
+                    with conn.cursor() as cursor:
+                        cursor.execute("SELECT * FROM student")
+                        rows = cursor.fetchall()
+                        check_tmp = bytes(tmp) if str(type(tmp)) == "<class 'System.Byte[]'>" else tmp
+                        for row in rows:
+                            stored = row.get('fingerprint_template')
+                            if not stored:
+                                continue
+                            stored_b = bytes(stored) if str(type(stored)) == "<class 'System.Byte[]'>" else stored
+                            score = zk.DBMatch(stored_b, check_tmp)
+                            if score > 200:
+                                zk.Light('green')
+                                return {"status": "already_registered", "message": "User already registered.", "student": {
+                                    "student_name": row.get('student_name'),
+                                    "age": row.get('age'),
+                                    "address": row.get('address'),
+                                    "course_taken": row.get('course_taken'),
+                                    "birthdate": row.get('birthdate'),
+                                }}
+                except Exception as _:
+                    pass
+                finally:
+                    try:
+                        if conn:
+                            conn.close()
+                    except Exception:
+                        pass
+            if not templates:
+                templates.append(tmp)
+                zk.Light('green')
+                print("Finger 1 registered successfully! 2 presses left.")
+                capture_log.append("Finger 1 registered successfully! 2 presses left.")
+                sleep(0.3)
+                continue
+            last_template = templates[-1]
+            if zk.DBMatch(last_template, tmp) > 0:
+                templates.append(tmp)
+                remaining = 3 - len(templates)
+                zk.Light('green')
+                if remaining > 0:
+                    print(f"Finger {len(templates)} registered successfully! {remaining} presses left.")
+                    capture_log.append(f"Finger {len(templates)} registered successfully! {remaining} presses left.")
+                sleep(0.3)
+            else:
+                zk.Light('red', 1)
+                print("Different finger. Please enter the original finger!")
+                capture_log.append("Different finger. Please enter the original finger!")
+                sleep(0.3)
+
+            if len(templates) == 3:
+                regTemp, regTempLen = zk.DBMerge(*templates)
+                if str(type(regTemp)) == "<class 'System.Byte[]'>":
+                    regTemp = bytes(regTemp)
+                template_b64 = base64.b64encode(regTemp).decode('utf-8')
+                return {"status": "ok", "message": "Fingerprint captured.", "fingerprint_template_b64": template_b64, "capture_log": capture_log}
+    except Exception as e:
+        print(f"Error during capture: {e}")
+        raise HTTPException(status_code=500, detail="Failed to capture fingerprint.")
+
+
+class SaveStudentRequest(RegisterRequest):
+    fingerprint_template_b64: str
+
+
+@app.post("/register-save")
+def register_save(payload: SaveStudentRequest):
+    try:
+        template_bytes = base64.b64decode(payload.fingerprint_template_b64)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid fingerprint_template_b64")
+
+    conn = None
+    try:
+        conn = pymysql.connect(host='localhost', user='root', password='', db='db', charset='utf8mb4')
+        with conn.cursor() as cursor:
+            sql = (
+                "INSERT INTO student (student_name, age, address, examinee_no, course_taken, date_registered, birthdate, fingerprint_template) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+            )
+            cursor.execute(
+                sql,
+                (
+                    payload.student_name,
+                    payload.age,
+                    payload.address,
+                    payload.examinee_no,
+                    payload.course_taken,
+                    payload.date_registered,
+                    payload.birthdate,
+                    pymysql.Binary(template_bytes),
+                ),
+            )
+        conn.commit()
+        return {"status": "ok", "message": "Student registered successfully."}
+    except Exception as e:
+        print(f"/register-save error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.post("/verify-user")
+def register_user():
+    fingerprint_scanner = FingerprintScanner()
+    print("Place your finger on the scanner...")
+    while True:
+        capture = fingerprint_scanner.zkfp2.AcquireFingerprint()
+        if capture:
+            tmp, img = capture
+            print("Checking fingerprint in database...")
+            found = fingerprint_scanner.verify_user_from_db(tmp)
+            if found:
+                print("Fingerprint verified!");
+                return found
+            else:
+                print("Fingerprint not found. Proceeding to registration.")
+                try:
+                    fingerprint_scanner.capture = capture
+                    fingerprint_scanner.register = True
+                    captureProgress = fingerprint_scanner.capture_handler()
+                    return captureProgress
+                except Exception as e:
+                    print(f"Error during registration: {e}")
+            sleep(1)
 
 if __name__ == "__main__":
     import uvicorn

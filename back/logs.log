@@ -21,3 +21,66 @@
 2025-07-27 15:07:43,033 - fps - INFO - 1 Devices found. Connecting to the first device.
 2025-07-27 15:11:22,287 - fps - INFO - 1 Devices found. Connecting to the first device.
 2025-07-27 15:12:54,695 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 10:56:41,506 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 10:58:16,447 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 10:58:16,451 - fps - INFO - Finger 1 registered successfully! 2 presses left.
+2025-08-14 11:03:15,809 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 11:03:15,809 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 11:03:35,708 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 11:03:35,708 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 11:03:35,716 - fps - INFO - Finger 1 registered successfully! 2 presses left.
+2025-08-14 11:03:35,716 - fps - INFO - Finger 1 registered successfully! 2 presses left.
+2025-08-14 12:08:53,229 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:08:58,609 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 12:08:58,618 - fps - INFO - Finger 1 registered successfully! 2 presses left.
+2025-08-14 12:09:49,509 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:11:05,001 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:11:05,001 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:13:04,899 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:14:35,192 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:14:35,192 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:16:57,270 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:22:59,687 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:23:52,248 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:23:52,248 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:23:53,580 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 12:23:53,580 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 12:23:53,582 - fps - INFO - Finger 1 registered successfully! 2 presses left.
+2025-08-14 12:23:53,582 - fps - INFO - Finger 1 registered successfully! 2 presses left.
+2025-08-14 12:23:58,497 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:23:58,497 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:23:58,497 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:23:58,915 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:23:58,915 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:23:58,915 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:23:58,915 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:24:01,025 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 12:24:01,025 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 12:24:01,025 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 12:24:01,025 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 12:24:01,026 - fps - INFO - Finger 1 registered successfully! 2 presses left.
+2025-08-14 12:24:01,026 - fps - INFO - Finger 1 registered successfully! 2 presses left.
+2025-08-14 12:24:01,026 - fps - INFO - Finger 1 registered successfully! 2 presses left.
+2025-08-14 12:24:01,026 - fps - INFO - Finger 1 registered successfully! 2 presses left.
+2025-08-14 12:24:09,616 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:24:09,616 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:24:09,616 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:24:09,616 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:24:09,616 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:24:12,155 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 12:24:12,155 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 12:24:12,155 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 12:24:12,155 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 12:24:12,155 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 12:24:12,159 - fps - INFO - Finger 1 registered successfully! 2 presses left.
+2025-08-14 12:24:12,159 - fps - INFO - Finger 1 registered successfully! 2 presses left.
+2025-08-14 12:24:12,159 - fps - INFO - Finger 1 registered successfully! 2 presses left.
+2025-08-14 12:24:12,159 - fps - INFO - Finger 1 registered successfully! 2 presses left.
+2025-08-14 12:24:12,159 - fps - INFO - Finger 1 registered successfully! 2 presses left.
+2025-08-14 12:25:10,777 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:25:46,053 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:25:48,066 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 12:25:48,070 - fps - INFO - Finger 1 registered successfully! 2 presses left.
+2025-08-14 12:28:53,383 - fps - INFO - 1 Devices found. Connecting to the first device.
+2025-08-14 12:28:57,496 - fps - ERROR - Error verifying user: (1146, "Table 'db.students' doesn't exist")
+2025-08-14 12:28:57,499 - fps - INFO - Finger 1 registered successfully! 2 presses left.
