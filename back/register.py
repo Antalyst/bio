@@ -5,7 +5,7 @@ from time import sleep
 from threading import Thread
 import pymysql
 from fastapi import FastAPI
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 import asyncio
@@ -17,7 +17,8 @@ import bcrypt
 import jwt
 from datetime import datetime, timedelta
 from typing import Any, Dict
-
+import pandas as pd
+from io import BytesIO
 app = FastAPI()
 
 app.add_middleware(
@@ -34,6 +35,7 @@ class RegisterRequest(BaseModel):
     address: str
     examinee_no: str
     course_taken: str
+    strand: str
     date_registered: str
     birthdate: str
 class LoginRequest(BaseModel):
@@ -122,10 +124,10 @@ def __init__(self):
         self.fid = 1
         self.keep_alive = True
         self.db_config = {
-            'host': 'localhost',
-            'user': 'root',
-            'password': '',
-            'db': 'db',
+            'host': 'srv1322.hstgr.io',
+            'user': 'u520834156_adm_usr2025',
+            'password': 's8L$9i@>EK',
+            'db': 'u520834156_admission_db25',
             'charset': 'utf8mb4'
         }
 
@@ -143,13 +145,14 @@ def save_template_to_db(self, template_bytes,  student_data: RegisterRequest):
                 address = input('address: ')
                 examinee_no = input('examinee_no: ')
                 course_taken = input('course_taken: ')
+                strand = input('strand: ')
                 date_registered = input('date_registered: ')
                 birthdate = input('birthdate: ')
                 sql = """
-                INSERT INTO students (student_name, age, address, examinee_no, course_taken, date_registered, birthdate, fingerprint_template)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO students (student_name, age, address, examinee_no, course_taken, strand, date_registered, birthdate, fingerprint_template)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s , %s)
                 """
-                cursor.execute(sql, (student_name, age, address, examinee_no, course_taken, date_registered, birthdate, template_bytes))
+                cursor.execute(sql, (student_name, age, address, examinee_no, course_taken,strand, date_registered, birthdate, template_bytes))
             conn.commit()
             self.logger.info('Fingerprint template saved to users table.')
         except Exception as e:
@@ -176,7 +179,7 @@ def verify_only():
             print("Checking fingerprint in database (student table)...")
             conn = None
             try:
-                conn = pymysql.connect(host='localhost', user='root', password='', db='db', cursorclass=pymysql.cursors.DictCursor)
+                conn = pymysql.connect(host='153.92.15.8', user='u520834156_adm_usr2025', password='s8L$9i@>EK', db='u520834156_admission_db25', cursorclass=pymysql.cursors.DictCursor)
                 with conn.cursor() as cursor:
                     cursor.execute("SELECT * FROM student")
                     results = cursor.fetchall()
@@ -198,7 +201,9 @@ def verify_only():
                                 "student_name": row.get('student_name'),
                                 "age": row.get('age'),
                                 "address": row.get('address'),
+                                "examinee_no": row.get('examinee_no'),
                                 "course_taken": row.get('course_taken'),
+                                "strand": row.get('strand'),
                                 "birthdate": row.get('birthdate'),
                             }
                     zk.Light('red', 1)
@@ -336,7 +341,7 @@ def register_start():
             # Try early verification on first tap to avoid re-registering existing users
             if not templates:
                 try:
-                    conn = pymysql.connect(host='localhost', user='root', password='', db='db', cursorclass=pymysql.cursors.DictCursor)
+                    conn = pymysql.connect(host='srv1322.hstgr.io', user='u520834156_adm_usr2025', password='s8L$9i@>EK', db='u520834156_admission_db25', cursorclass=pymysql.cursors.DictCursor)
                     with conn.cursor() as cursor:
                         cursor.execute("SELECT * FROM student")
                         rows = cursor.fetchall()
@@ -441,11 +446,11 @@ def register_save(payload: SaveStudentRequest):
 
     conn = None
     try:
-        conn = pymysql.connect(host='localhost', user='root', password='', db='db', charset='utf8mb4')
+        conn = pymysql.connect(host='153.92.15.8', user='u520834156_adm_usr2025', password='s8L$9i@>EK', db='u520834156_admission_db25', charset='utf8mb4')
         with conn.cursor() as cursor:
             sql = (
-                "INSERT INTO student (student_name, age, address, examinee_no, course_taken, date_registered, birthdate, fingerprint_template) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+                "INSERT INTO student (student_name, age, address, examinee_no, course_taken, strand, date_registered, birthdate, fingerprint_template) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
             )
             cursor.execute(
                 sql,
@@ -455,6 +460,7 @@ def register_save(payload: SaveStudentRequest):
                     payload.address,
                     payload.examinee_no,
                     payload.course_taken,
+                    payload.strand,
                     payload.date_registered,
                     payload.birthdate,
                     pymysql.Binary(template_bytes),
@@ -501,7 +507,7 @@ def admin_create(payload: AdminCreateRequest):
         raise HTTPException(status_code=400, detail="username and password are required")
     conn = None
     try:
-        conn = pymysql.connect(host='localhost', user='root', password='', db='db', charset='utf8mb4', cursorclass=pymysql.cursors.DictCursor)
+        conn = pymysql.connect(host='srv1322.hstgr.io', user='u520834156_adm_usr2025', password='s8L$9i@>EK', db='u520834156_admission_db25', charset='utf8mb4', cursorclass=pymysql.cursors.DictCursor)
         with conn.cursor() as cursor:
             # check if exists
             cursor.execute("SELECT id FROM admin WHERE username=%s", (payload.username,))
@@ -524,7 +530,7 @@ def admin_create(payload: AdminCreateRequest):
 def login(payload: LoginRequest):
     conn = None
     try:
-        conn = pymysql.connect(host='localhost', user='root', password='', db='db', charset='utf8mb4', cursorclass=pymysql.cursors.DictCursor)
+        conn = pymysql.connect(host='srv1322.hstgr.io', user='u520834156_adm_usr2025', password='s8L$9i@>EK', db='u520834156_admission_db25', charset='utf8mb4', cursorclass=pymysql.cursors.DictCursor)
         with conn.cursor() as cursor:
             cursor.execute("SELECT * FROM admin WHERE username=%s", (payload.username,))
             row = cursor.fetchone()
@@ -544,6 +550,73 @@ def login(payload: LoginRequest):
         if conn:
             conn.close()
 
+@app.get("/students")
+def get_students():
+    conn = None
+    try:
+        conn = pymysql.connect(host='srv1322.hstgr.io', user='u520834156_adm_usr2025', password='s8L$9i@>EK', db='u520834156_admission_db25', cursorclass=pymysql.cursors.DictCursor)
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id, student_name, age, address, examinee_no, course_taken, date_registered, birthdate FROM student ORDER BY date_registered DESC")
+            return cursor.fetchall()
+    finally:
+        if conn: conn.close()
+@app.get("/export-batch")
+def export_batch(month: str = Query(None), year: str = Query(None)):
+    conn = None
+    try:
+        conn = pymysql.connect(host='srv1322.hstgr.io', user='u520834156_adm_usr2025', password='s8L$9i@>EK', db='u520834156_admission_db25', cursorclass=pymysql.cursors.DictCursor)
+        with conn.cursor() as cursor:
+            sql = "SELECT student_name, age, address, examinee_no, course_taken, date_registered, birthdate, strandfil FROM student"
+            if month and year:
+                search_pattern = f"{year}-{month}%"
+                cursor.execute(sql + " WHERE date_registered LIKE %s", (search_pattern,))
+            else:
+                cursor.execute(sql)
+            
+            rows = cursor.fetchall()
+            if not rows:
+                raise HTTPException(status_code=404, detail="No data found for this batch")
+            df = pd.DataFrame(rows)
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='Examinees')
+            
+            output.seek(0)
+            
+            filename = f"Batch_{year}_{month}.xlsx" if month else "All_Examinees.xlsx"
+            return StreamingResponse(
+                output,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
+    finally:
+        if conn: conn.close()
+
+
+
+# @app.get("/check-all-tables")
+# def get_all_tables():
+#     conn = None
+#     try:
+#         conn = pymysql.connect(
+#             host='srv1322.hstgr.io', 
+#             user='u520834156_adm_usr2025', 
+#             password='s8L$9i@>EK', 
+#             db='u520834156_admission_db25', 
+#             cursorclass=pymysql.cursors.DictCursor
+#         )
+#         with conn.cursor() as cursor:
+#             cursor.execute("SHOW TABLES")
+#             tables = cursor.fetchall()
+#             return {
+#                 "database": "u520834156_admission_db25",
+#                 "tables": tables
+#             }
+#     except Exception as e:
+#         return {"error": str(e)}
+#     finally:
+#         if conn: 
+#             conn.close()
 
 
 if __name__ == "__main__":
